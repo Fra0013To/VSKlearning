@@ -90,3 +90,60 @@ class DiscontinuityDense(tf.keras.layers.Dense):
 
         return out_tensor
 
+
+class DenseResidualLayer(tf.keras.layers.Dense):
+    def __init__(self,
+                 units,
+                 activation=None,
+                 activation_after_sum=True,
+                 use_bias=True,
+                 kernel_initializer='glorot_uniform',
+                 bias_initializer='zeros',
+                 kernel_regularizer=None,
+                 bias_regularizer=None,
+                 activity_regularizer=None,
+                 kernel_constraint=None,
+                 bias_constraint=None,
+                 **kwargs
+                 ):
+
+        super().__init__(units=units,
+                         activation=activation,
+                         use_bias=use_bias,
+                         kernel_initializer=kernel_initializer, bias_initializer=bias_initializer,
+                         kernel_regularizer=kernel_regularizer, bias_regularizer=bias_regularizer,
+                         activity_regularizer=activity_regularizer,
+                         kernel_constraint=kernel_constraint, bias_constraint=bias_constraint,
+                         **kwargs
+                         )
+
+        self._activation_after_sum = activation_after_sum
+
+    def get_config(self):
+        config = super().get_config()
+
+        config['activation_after_sum'] = self._activation_after_sum
+
+        return config
+
+    def call(self, inputs):
+
+        x = tf.matmul(inputs, self.kernel)
+        if self.bias is not None:
+            x = x + self.bias
+        if self.activation is not None:
+            if self._activation_after_sum:
+                x = self.activation(x + inputs)
+            else:
+                x = self.activation(x) + inputs
+        else:
+            x = x + inputs
+
+        return x
+
+
+
+
+
+
+
