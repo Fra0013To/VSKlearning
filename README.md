@@ -1,3 +1,3 @@
 # Learning Variably Scaled Kernels via Discontinuous Neural Networks (δNN-VSKs)
 
-Code will be available soon
+A guide for explaining the code and running the examples will be available soon.
