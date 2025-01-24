@@ -10,6 +10,7 @@ from sklearn.preprocessing import MinMaxScaler
 from scipy.sparse.linalg import cg
 from scipy.stats import qmc
 import time
+from datetime import timedelta
 import argparse
 import os
 import pickle
@@ -21,7 +22,7 @@ import matplotlib.pyplot as plt
 default_data_path = 'data/experiment_results'
 
 timenow = time.localtime()
-ID = time.strftime('%Y%m%d_%H%M%S', timenow)
+ID_ = time.strftime('%Y%m%d_%H%M%S', timenow)
 rs = int(time.strftime('%Y%m%d', timenow)) + int(time.strftime('%H%M%S', timenow))
 
 custom_objects = {
@@ -35,6 +36,9 @@ custom_objects = {
 
 def parse_args():
     parser = argparse.ArgumentParser()
+    parser.add_argument('-id', '--identity_code', type=str, default=ID_,
+                        help=f'List of discontinuous functions allowed: {list(discfuncs_dict.keys())}'
+                        )
     parser.add_argument('-df', '--discontinuous_function', type=str, default='dfunc_basic_004',
                         help=f'List of discontinuous functions allowed: {list(discfuncs_dict.keys())}'
                         )
@@ -81,6 +85,8 @@ def parse_args():
                         help='Default value: False (i.e., True if the option is given)')
     parser.add_argument('-s', '--save_results', action='store_true',
                         help='Default value: False (i.e., True if the option is given)')
+    parser.add_argument('-tt', '--take_time', action='store_true',
+                        help='Default value: False (i.e., True if the option is given)')
     parser.add_argument('-spl', '--save_plots', action='store_true',
                         help='Default value: False (i.e., True if the option is given)')
     parser.add_argument('-shpl', '--show_plots', action='store_true',
@@ -100,6 +106,8 @@ def parse_args():
 if __name__ == '__main__':
 
     args = parse_args()
+
+    ID = args.identity_code
 
     random_seed = args.random_seed
 
@@ -185,6 +193,7 @@ if __name__ == '__main__':
         if args.load_psimodel is None:
             model_psi.compile(optimizer=OPTIMIZER, loss='mse', metrics=['mae'])
 
+            t0_fit = time.time()
             history = model_psi.fit(
                 Xtrain, ytrain,
                 epochs=EPOCHS,
@@ -199,6 +208,9 @@ if __name__ == '__main__':
                     tf.keras.callbacks.TerminateOnNaN()
                 ]
             )
+            tFin_fit = time.time()
+            fit_time = tFin_fit - t0_fit
+            fit_time_hms = timedelta(seconds=fit_time)
 
         model = VSKFitter(
             model_psi=model_psi,
@@ -217,6 +229,8 @@ if __name__ == '__main__':
         )
 
         model.compile(optimizer=OPTIMIZER, loss='mse', metrics=['mae'])
+
+        t0_fit = time.time()
         history = model.fit(
             X, y,
             epochs=EPOCHS,
@@ -227,6 +241,9 @@ if __name__ == '__main__':
                 tf.keras.callbacks.TerminateOnNaN()
             ]
         )
+        tFin_fit = time.time()
+        fit_time = tFin_fit - t0_fit
+        fit_time_hms = timedelta(seconds=fit_time)
 
     if args.load_psimodel is not None:
         tot_epochs = len(history['loss'])
@@ -444,6 +461,34 @@ if __name__ == '__main__':
                 pickle.dump(history.history, file)
 
         model._export(f'{args.saving_folder}/{ID}', 'vskmodel')
+
+    if args.take_time:
+        if not os.path.exists(f'{args.saving_folder}/chrono_deltavsk.csv'):
+            with open(f'{args.saving_folder}/chrono_deltavsk.csv', 'w') as file:
+                print(
+                    'ID, training_time_hms, training_time_s, predictor, rs, disc_func, psi_model, rbf, shape_param, pts_dist, ' +
+                    'optimizer, N, n_eval, max_epochs, tot_epochs, lr_factor, lr_pat, es_pat, psimodel_only, ' +
+                    'loaded_psi, batch_psimod_only, trainperc_psimod_only, reg_fac',
+                    file=file
+                )
+
+        loaded_psi_chrono = args.load_psimodel
+        if loaded_psi_chrono is None:
+            loaded_psi_chrono = False
+
+        tot_str_chrono = ''
+        str_interpol_chrono = (
+                f'{ID}, {fit_time_hms}, {fit_time}, vsk_interpol, {random_seed}, {args.discontinuous_function}, {args.psi_model}, {args.radialbasisfunction}, ' +
+                f'{shape_param}, {args.distribution_num_centers}, ' +
+                f'{args.optimizer}, {N}, {neval}, ' +
+                f'{EPOCHS}, {tot_epochs}, {args.lr_factor}, {args.lr_patience}, {args.es_patience}, ' +
+                f'{args.psimodel_only_nocoeffs}, {loaded_psi_chrono}, {args.minibatch_size_psimodel_only}, ' +
+                f'{args.trainperc_psimodel_only}, {reg_factor}'
+        )
+        tot_str_chrono = tot_str_chrono + str_interpol_chrono
+
+        with open(f'{args.saving_folder}/chrono_deltavsk.csv', 'a') as file:
+            print(tot_str_chrono, file=file)
 
     if (args.save_plots and args.save_results) or args.show_plots:
 
